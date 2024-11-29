@@ -14,3 +14,4 @@ pytz~=2024.1
 django-cors-headers
 django-extensions
 whitenoise
+daphne==4.1.2
