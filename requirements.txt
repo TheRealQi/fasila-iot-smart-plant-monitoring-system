@@ -13,3 +13,4 @@ asgiref~=3.8.1
 pytz~=2024.1
 django-cors-headers
 django-extensions
+whitenoise
