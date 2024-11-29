@@ -69,5 +69,12 @@ USE_TZ = False
 
 CORS_ALLOW_ALL_ORIGINS = True
 
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
+
 import django_heroku
 django_heroku.settings(locals())
