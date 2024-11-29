@@ -27,6 +27,7 @@ DATABASES = {
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ALLOWED_HOSTS = ['.herokuapp.com']
