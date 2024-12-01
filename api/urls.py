@@ -1,7 +1,7 @@
 from django.urls import path
 
-from api.views.devices_views import SensorsDataHistory
 from api.views.diseases_views import DiseasesListAll, DiseaseDetailView, DiseaseGet2RandomView, DiseaseSearchView
+from api.views.notifications_views import SendNotificationView, BroadcastNotificationView
 from api.views.plants_views import PlantsListAll, PlantDetailView, PlantGet2RandomView, PlantSearchView
 from api.views.devices_views import DeviceLatestStatus, SensorsDataLatestValues, SensorsDataHistory
 
@@ -23,4 +23,8 @@ urlpatterns = [
     path('devices/<int:device_id>/latest-status/', DeviceLatestStatus.as_view(), name='device-latest-status'),
     path('devices/<int:device_id>/sensors/latest/', SensorsDataLatestValues.as_view(), name='sensors-latest-values'),
     path('devices/<int:device_id>/sensors/history/<str:sensor_type>/<str:date_range>/', SensorsDataHistory.as_view(), name='sensors-history'),
+
+    # Notification URLs
+    path('notifications/send/', SendNotificationView.as_view(), name='send-notification'),
+    path('notifications/broadcast/', BroadcastNotificationView.as_view(), name='broadcast-notification'),
 ]
