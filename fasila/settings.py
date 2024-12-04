@@ -5,7 +5,7 @@ import dj_database_url
 import firebase_admin
 from firebase_admin import credentials
 
-cred = credentials.Certificate('fasila/service-account.json')
+cred = credentials.Certificate(json.loads(os.getenv('GOOGLE_CREDENTIALS')))
 firebase_admin.initialize_app(cred)
 
 load_dotenv()
