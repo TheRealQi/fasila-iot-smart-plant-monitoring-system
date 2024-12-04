@@ -1,13 +1,32 @@
 from rest_framework import serializers
-from .models import SensorsData, Device
-
+from .models import TemperatureSensor, HumiditySensor, SoilMoistureSensor, LightIntensitySensor, NPKSensor, Device
 
 class DeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Device
         fields = ['device_id', 'status', 'last_online']
 
-class SensorsDataSerializer(serializers.ModelSerializer):
+class TemperatureSensorSerializer(serializers.ModelSerializer):
     class Meta:
-        model = SensorsData
-        fields = ['id', 'timestamp', 'device_id', 'temperature', 'humidity', 'moisture', 'light_intensity', 'nitrogen', 'phosphorus', 'potassium']
+        model = TemperatureSensor
+        fields = ['id', 'device', 'timestamp', 'temperature']
+
+class HumiditySensorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HumiditySensor
+        fields = ['id', 'device', 'timestamp', 'humidity']
+
+class SoilMoistureSensorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SoilMoistureSensor
+        fields = ['id', 'device', 'timestamp', 'moisture']
+
+class LightIntensitySensorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LightIntensitySensor
+        fields = ['id', 'device', 'timestamp', 'light_intensity']
+
+class NPKSensorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NPKSensor
+        fields = ['id', 'device', 'timestamp', 'nitrogen', 'phosphorus', 'potassium']

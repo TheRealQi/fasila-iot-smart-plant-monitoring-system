@@ -8,23 +8,72 @@ class Device(models.Model):
     last_online = models.DateTimeField(default=datetime.now)
 
     def __str__(self):
-        return f'{self.device_id}'
+        return f'Device {self.device_id}'
 
 
-class SensorsData(models.Model):
+class TemperatureSensor(models.Model):
     id = models.AutoField(primary_key=True)
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='temperature_data')
     timestamp = models.DateTimeField(default=datetime.now)
-    device = models.ForeignKey(Device, on_delete=models.CASCADE)
     temperature = models.FloatField(default=0.0)
+
+    def __str__(self):
+        return f'Temperature {self.temperature} from Device {self.device} at {self.timestamp}'
+
+    class Meta:
+        ordering = ['-timestamp']
+
+
+class HumiditySensor(models.Model):
+    id = models.AutoField(primary_key=True)
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='humidity_data')
+    timestamp = models.DateTimeField(default=datetime.now)
     humidity = models.FloatField(default=0.0)
+
+    def __str__(self):
+        return f'Humidity {self.humidity} from Device {self.device} at {self.timestamp}'
+
+    class Meta:
+        ordering = ['-timestamp']
+
+
+class SoilMoistureSensor(models.Model):
+    id = models.AutoField(primary_key=True)
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='moisture_data')
+    timestamp = models.DateTimeField(default=datetime.now)
     moisture = models.FloatField(default=0.0)
+
+    def __str__(self):
+        return f'Soil Moisture {self.moisture} from Device {self.device} at {self.timestamp}'
+
+    class Meta:
+        ordering = ['-timestamp']
+
+
+class LightIntensitySensor(models.Model):
+    id = models.AutoField(primary_key=True)
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='light_data')
+    timestamp = models.DateTimeField(default=datetime.now)
     light_intensity = models.FloatField(default=0.0)
+
+    def __str__(self):
+        return f'Light Intensity {self.light_intensity} from Device {self.device} at {self.timestamp}'
+
+    class Meta:
+        ordering = ['-timestamp']
+
+
+class NPKSensor(models.Model):
+    id = models.AutoField(primary_key=True)
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='nutrient_data')
+    timestamp = models.DateTimeField(default=datetime.now)
     nitrogen = models.FloatField(default=0.0)
     phosphorus = models.FloatField(default=0.0)
     potassium = models.FloatField(default=0.0)
 
     def __str__(self):
-        return f"Data from Device {self.device} at {self.timestamp}"
+        return (f'Nitrogen: {self.nitrogen}, Phosphorus: {self.phosphorus}, '
+                f'Potassium: {self.potassium} from Device {self.device} at {self.timestamp}')
 
     class Meta:
         ordering = ['-timestamp']

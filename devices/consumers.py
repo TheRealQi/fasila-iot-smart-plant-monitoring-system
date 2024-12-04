@@ -1,5 +1,7 @@
 import json
+from datetime import datetime
 from channels.generic.websocket import AsyncWebsocketConsumer
+
 
 class SensorsDataConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -18,21 +20,17 @@ class SensorsDataConsumer(AsyncWebsocketConsumer):
         )
 
     async def sensors_data(self, event):
-        print(f"Received device sensors update: {event}")
+        print(f"Sending data to {self.device_id}")
         await self.send(text_data=json.dumps({
+            "type": event["type"],
             "device_id": event["device_id"],
             "timestamp": event["timestamp"],
-            "temperature": event["temperature"],
-            "humidity": event["humidity"],
-            "moisture": event["moisture"],
-            "light_intensity": event["light_intensity"],
-            "nitrogen": event["nitrogen"],
-            "phosphorus": event["phosphorus"],
-            "potassium": event["potassium"]
+            **{k: v for k, v in event.items() if k not in ["type", "device_id", "timestamp"]}
         }))
 
     async def device_status(self, event):
         await self.send(text_data=json.dumps({
+            "type": event["type"],
             "device_id": event["device_id"],
             "status": event["status"]
         }))
