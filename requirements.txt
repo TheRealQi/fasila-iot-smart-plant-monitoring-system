@@ -16,3 +16,4 @@ django-extensions
 whitenoise
 daphne==4.1.2
 celery
+firebase_admin
