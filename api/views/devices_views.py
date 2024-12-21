@@ -1,20 +1,64 @@
-from datetime import timedelta
-from django.utils.timezone import now
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from bson.objectid import ObjectId
-from devices.models import Device
+from rest_framework.permissions import IsAuthenticated
+from devices.models import Device, UserDevice
 from devices.serializers import DeviceSerializer
-from devices.models import TemperatureSensor, HumiditySensor, SoilMoistureSensor, LightIntensitySensor, NPKSensor
-from devices.serializers import TemperatureSensorSerializer, HumiditySensorSerializer, SoilMoistureSensorSerializer, LightIntensitySensorSerializer, NPKSensorSerializer
+from devices.serializers import TemperatureSensorSerializer, HumiditySensorSerializer, SoilMoistureSensorSerializer, \
+    LightIntensitySensorSerializer, NPKSensorSerializer
 
+class RegisterUserDevice(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request, device_id):
+        try:
+            device = Device.objects.get(device_id=device_id)
+            if not device:
+                return Response(
+                    {"error": "Device not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            if UserDevice.objects.filter(user=request.user, device=device).exists():
+                return Response(
+                    {"error": "Device already registered to user"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            UserDevice.objects.create(user=request.user, device=device)
+            return Response(
+                {"message": "Device registered successfully"},
+                status=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            return Response(
+                {"error": "Unable to register device", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+class UserDevices(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            user_devices = UserDevice.objects.filter(user=request.user)
+            devices_data = []
+            for user_device in user_devices:
+                device = user_device.device
+                device_serializer = DeviceSerializer(device)
+                device_data = device_serializer.data
+                device_data['unread_notifications'] = device.unread_notifications
+                devices_data.append(device_data)
+            return Response(devices_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {"error": "Unable to retrieve user devices", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class DeviceLatestStatus(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request, device_id):
         try:
             device = Device.objects.get(device_id=device_id)
+            if not UserDevice.objects.filter(user=request.user, device=device).exists():
+                return Response({"error": "Device not found or you don't have access to this device"}, status=status.HTTP_404_NOT_FOUND)
             serializer = DeviceSerializer(device)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Device.DoesNotExist:
@@ -24,9 +68,12 @@ class DeviceLatestStatus(APIView):
 
 
 class SensorsDataLatestValues(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request, device_id):
         try:
             device = Device.objects.get(device_id=device_id)
+            if not UserDevice.objects.filter(user=request.user, device=device).exists():
+                return Response({"error": "Device not found or you don't have access to this device"}, status=status.HTTP_404_NOT_FOUND)
             temperature = device.temperature_data.first()
             humidity = device.humidity_data.first()
             moisture = device.moisture_data.first()
@@ -37,59 +84,10 @@ class SensorsDataLatestValues(APIView):
                 "humidity": HumiditySensorSerializer(humidity).data if humidity else None,
                 "moisture": SoilMoistureSensorSerializer(moisture).data if moisture else None,
                 "light_intensity": LightIntensitySensorSerializer(light_intensity).data if light_intensity else None,
-                "nitrogen": nutrient.nitrogen if nutrient else None,
-                "phosphorus": nutrient.phosphorus if nutrient else None,
-                "potassium": nutrient.potassium if nutrient else None,
+                "nutrient": NPKSensorSerializer(nutrient).data if nutrient else None,
             }
             return Response(data, status=status.HTTP_200_OK)
         except Device.DoesNotExist:
             return Response({"error": "Device not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-class SensorsDataHistory(APIView):
-    def get(self, request, device_id, sensor_type, date_range):
-        try:
-            date_ranges = {
-                '1d': timedelta(days=1),
-                '5d': timedelta(days=5),
-                '1w': timedelta(days=7),
-                '1m': timedelta(days=30),
-                '3m': timedelta(days=90),
-                '6m': timedelta(days=180),
-                '1y': timedelta(days=365),
-                'max': None,
-            }
-            duration = date_ranges.get(date_range)
-            start_date = now() - duration if duration else None
-
-            sensor_models = {
-                "temperature": TemperatureSensor,
-                "humidity": HumiditySensor,
-                "moisture": SoilMoistureSensor,
-                "light_intensity": LightIntensitySensor,
-                "nutrients": NPKSensor,
-            }
-
-            model = sensor_models.get(sensor_type)
-            if not model:
-                return Response({"error": "Invalid sensor type"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Filter based on date range
-            queryset = model.objects.filter(device_id=device_id)
-            if start_date:
-                queryset = queryset.filter(timestamp__gte=start_date)
-
-            # Serialize the queryset
-            serializer = {
-                "temperature": TemperatureSensorSerializer,
-                "humidity": HumiditySensorSerializer,
-                "moisture": SoilMoistureSensorSerializer,
-                "light_intensity": LightIntensitySensorSerializer,
-                "nutrients": NPKSensorSerializer,
-            }[sensor_type](queryset, many=True)
-
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

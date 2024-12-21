@@ -3,8 +3,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from bson.objectid import ObjectId
-from ..models import plants_collection
-from ..serializers import PlantSerializer
+from guide.models import plants_collection
+from guide.serializers import PlantSerializer
 
 
 class PlantsListAll(APIView):

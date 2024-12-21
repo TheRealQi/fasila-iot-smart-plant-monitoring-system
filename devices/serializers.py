@@ -4,7 +4,7 @@ from .models import TemperatureSensor, HumiditySensor, SoilMoistureSensor, Light
 class DeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Device
-        fields = ['device_id', 'status', 'last_online']
+        fields = ['device_id', 'status', 'last_online', 'unread_notifications', 'healthy']
 
 class TemperatureSensorSerializer(serializers.ModelSerializer):
     class Meta:

@@ -1,20 +1,31 @@
-from datetime import datetime
+import uuid
+from django.utils.timezone import now
 from django.db import models
 
 
 class Device(models.Model):
     device_id = models.BigAutoField(primary_key=True)
     status = models.BooleanField(default=False, null=False)
-    last_online = models.DateTimeField(default=datetime.now)
+    last_online = models.DateTimeField(default=now)
+    unread_notifications = models.IntegerField(default=0)
+    healthy = models.BooleanField(default=True)
 
     def __str__(self):
         return f'Device {self.device_id}'
 
 
+class UserDevice(models.Model):
+    user = models.ForeignKey('users.CustomUser', on_delete=models.CASCADE)
+    device = models.ForeignKey(Device, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f'Device {self.device} assigned to User {self.user}'
+
+
 class TemperatureSensor(models.Model):
     id = models.AutoField(primary_key=True)
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='temperature_data')
-    timestamp = models.DateTimeField(default=datetime.now)
+    timestamp = models.DateTimeField(default=now)
     temperature = models.FloatField(default=0.0)
 
     def __str__(self):
@@ -27,7 +38,7 @@ class TemperatureSensor(models.Model):
 class HumiditySensor(models.Model):
     id = models.AutoField(primary_key=True)
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='humidity_data')
-    timestamp = models.DateTimeField(default=datetime.now)
+    timestamp = models.DateTimeField(default=now)
     humidity = models.FloatField(default=0.0)
 
     def __str__(self):
@@ -40,7 +51,7 @@ class HumiditySensor(models.Model):
 class SoilMoistureSensor(models.Model):
     id = models.AutoField(primary_key=True)
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='moisture_data')
-    timestamp = models.DateTimeField(default=datetime.now)
+    timestamp = models.DateTimeField(default=now)
     moisture = models.FloatField(default=0.0)
 
     def __str__(self):
@@ -53,7 +64,7 @@ class SoilMoistureSensor(models.Model):
 class LightIntensitySensor(models.Model):
     id = models.AutoField(primary_key=True)
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='light_data')
-    timestamp = models.DateTimeField(default=datetime.now)
+    timestamp = models.DateTimeField(default=now)
     light_intensity = models.FloatField(default=0.0)
 
     def __str__(self):
@@ -66,7 +77,7 @@ class LightIntensitySensor(models.Model):
 class NPKSensor(models.Model):
     id = models.AutoField(primary_key=True)
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='nutrient_data')
-    timestamp = models.DateTimeField(default=datetime.now)
+    timestamp = models.DateTimeField(default=now)
     nitrogen = models.FloatField(default=0.0)
     phosphorus = models.FloatField(default=0.0)
     potassium = models.FloatField(default=0.0)

@@ -1,13 +1,15 @@
 from random import sample
 from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from bson.objectid import ObjectId
-from ..models import diseases_collection
-from ..serializers import DiseaseSerializer
+from guide.models import diseases_collection
+from guide.serializers import DiseaseSerializer
 
 
 class DiseasesListAll(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request):
         diseases = list(diseases_collection.find())
         for disease in diseases:
@@ -17,6 +19,7 @@ class DiseasesListAll(APIView):
 
 
 class DiseaseGet2RandomView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request):
         diseases = list(diseases_collection.find())
         if len(diseases) >= 2:
@@ -29,6 +32,7 @@ class DiseaseGet2RandomView(APIView):
 
 
 class DiseaseDetailView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request, disease_id):
         try:
             disease = diseases_collection.find_one({'_id': ObjectId(disease_id)})
@@ -41,6 +45,7 @@ class DiseaseDetailView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class DiseaseSearchView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request):
         query = request.query_params.get('query', '')
         if not query:
