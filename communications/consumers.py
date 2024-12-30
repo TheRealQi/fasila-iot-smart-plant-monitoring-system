@@ -81,15 +81,12 @@ class DevicesDataConsumer(AsyncWebsocketConsumer):
 
     async def notification(self, event):
         try:
+            notification_data = event.copy()
+            del notification_data["type"]
             await self.send(text_data=json.dumps({
-                "type": event["type"],
+                "type": "notification",
                 "device_id": event["device_id"],
-                "notification_id": event["notification_id"],
-                "title": event["title"],
-                "message": event["message"],
-                "notification_type": event["notification_type"],
-                "priority": event["priority"],
-                "timestamp": event["timestamp"],
+                **notification_data
             }))
         except Exception as e:
             print(f"Error sending notification: {str(e)}")
@@ -98,10 +95,7 @@ class DevicesDataConsumer(AsyncWebsocketConsumer):
         try:
             await self.send(text_data=json.dumps({
                 "type": event["type"],
-                "device_id": event["device_id"],
                 "status": event["status"],
-                "last_online": event["last_online"],
-                "unread_notifications": event["unread_notifications"]
             }))
         except Exception as e:
             print(f"Error sending device status: {str(e)}")

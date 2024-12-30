@@ -1,5 +1,4 @@
 import datetime
-
 from django.db import models
 
 
@@ -19,8 +18,8 @@ class Notification(models.Model):
         ('sensor', 'Sensor'),
         ('other', 'Other')
     ]
+    id = models.AutoField(primary_key=True)
     device_id = models.ForeignKey('devices.Device', on_delete=models.CASCADE, related_name='device_notifications')
-    notification_id = models.AutoField(primary_key=True)
     notification_type = models.CharField(max_length=255, choices=TYPE_CHOICES, default='other')
     title = models.CharField(max_length=255, blank=True, null=True, default="No Title")
     message = models.TextField()
@@ -47,3 +46,14 @@ class SensorNotification(models.Model):
     notification = models.OneToOneField(Notification, on_delete=models.CASCADE, related_name='sensor_notification',
                                         primary_key=True)
     sensor_type = models.CharField(max_length=255, choices=SENSOR_CHOICES)
+
+
+class UserFCMTokens(models.Model):
+    user = models.ForeignKey('users.CustomUser', on_delete=models.CASCADE)
+    fcm_token = models.CharField(max_length=512)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user_id', 'fcm_token'], name='unique_user_fcm_token')
+        ]

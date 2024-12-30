@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser, UserFCMTokens
+from .models import CustomUser
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -24,10 +24,3 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user.set_password(validated_data['password'])
         user.save()
         return user
-
-
-class UserFCMTokensSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserFCMTokens
-        fields = ['id', 'user_id', 'fcm_token', 'created_at']
-        read_only_fields = ['id', 'created_at']

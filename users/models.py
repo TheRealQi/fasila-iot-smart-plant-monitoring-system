@@ -30,14 +30,3 @@ class CustomUser(AbstractBaseUser):
 
     def __str__(self):
         return self.username
-
-
-class UserFCMTokens(models.Model):
-    user = models.ForeignKey('CustomUser', on_delete=models.CASCADE)
-    fcm_token = models.CharField(max_length=512)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=['user_id', 'fcm_token'], name='unique_user_fcm_token')
-        ]

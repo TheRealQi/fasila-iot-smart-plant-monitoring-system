@@ -16,8 +16,6 @@ class JwtAuthMiddleware(BaseMiddleware):
         query_string = scope["query_string"].decode()
         query_params = parse_qs(query_string)
         token = query_params.get('token', [None])[0]
-        print(f"Query string: {query_string}")
-        print(f"Token received: {token}")
         if token:
             try:
                 UntypedToken(token)
@@ -26,17 +24,12 @@ class JwtAuthMiddleware(BaseMiddleware):
                     settings.SECRET_KEY,
                     algorithms=["HS256"]
                 )
-                print(f"Decoded token data: {decoded_data}")
                 user = await self.get_user(decoded_data)
-                print(f"Retrieved user: {user}")
                 scope['user'] = user
             except (InvalidToken, TokenError) as e:
-                print(f"Token validation failed: {str(e)}")
                 scope['user'] = AnonymousUser()
         else:
-            print("No token provided in WebSocket connection")
             scope['user'] = AnonymousUser()
-
         return await super().__call__(scope, receive, send)
 
     @database_sync_to_async
@@ -46,5 +39,4 @@ class JwtAuthMiddleware(BaseMiddleware):
             from users.models import CustomUser
             return CustomUser.objects.get(id=user_id)
         except Exception as e:
-            print(f"Error getting user: {str(e)}")
             return AnonymousUser()

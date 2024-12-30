@@ -17,16 +17,10 @@ MQTT_TOPIC = "#"
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print(f"Connected successfully to MQTT broker.")
         client.subscribe(MQTT_TOPIC)
-        print(f"Subscribed to {MQTT_TOPIC}")
-    else:
-        print(f"Failed to connect to MQTT broker. Return code: {rc}")
-
 
 def on_disconnect(client, userdata, rc):
-    print(f"Disconnected from MQTT broker with return code: {rc}")
-
+    pass
 
 def on_message(client, userdata, msg):
     from devices.models import Device, TemperatureSensor, HumiditySensor, SoilMoistureSensor, LightIntensitySensor, \
@@ -34,9 +28,9 @@ def on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode())
         if not msg.payload:
-            print(f"Received empty message from topic: {msg.topic}")
+            print(f"Received empty message from topic {msg.topic}")
         elif msg.topic == "devices/status/all":
-            print(f"Received status message: {payload}")
+            print(f"Received status update: {payload}")
             d_id = payload.get("device_id")
             status = payload.get("status").strip().lower() == "online"
             Device.objects.update_or_create(
@@ -80,13 +74,10 @@ def on_message(client, userdata, msg):
                     potassium=payload.get("potassium")
                 )
             print(f"Received sensor data: {payload}")
-    except json.JSONDecodeError as e:
-        print(f"Failed to decode JSON from message: {e} | Payload: {msg.payload.decode()} from topic: {msg.topic}")
     except Exception as e:
-        print(f"An error occurred: {e}!!!!!!!!!!!!!!!!!!!!!!!")
+        print(f"Error processing message: {e}")
 
 def publish_command(command):
-    print(f"Publishing command: {command}")
     client.publish("devices/commands", json.dumps(command), qos=1)
 
 client = mqtt.Client()

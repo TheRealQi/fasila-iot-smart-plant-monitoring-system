@@ -7,12 +7,16 @@ from devices.serializers import DeviceSerializer
 from devices.serializers import TemperatureSensorSerializer, HumiditySensorSerializer, SoilMoistureSensorSerializer, \
     LightIntensitySensorSerializer, NPKSensorSerializer
 
+
 class RegisterUserDevice(APIView):
     permission_classes = [IsAuthenticated]
-    def post(self, request, device_id):
+
+    def post(self, request):
         try:
-            device = Device.objects.get(device_id=device_id)
-            if not device:
+            device_id = request.data.get('device_id')
+            try:
+                device = Device.objects.get(device_id=device_id)
+            except Device.DoesNotExist:
                 return Response(
                     {"error": "Device not found"},
                     status=status.HTTP_404_NOT_FOUND
@@ -22,18 +26,25 @@ class RegisterUserDevice(APIView):
                     {"error": "Device already registered to user"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            UserDevice.objects.create(user=request.user, device=device)
+            user_device = UserDevice.objects.create(user=request.user, device=device)
             return Response(
-                {"message": "Device registered successfully"},
+                {
+                    "message": "Device registered successfully",
+                    "device": DeviceSerializer(device).data
+                },
                 status=status.HTTP_201_CREATED
             )
+
         except Exception as e:
             return Response(
                 {"error": "Unable to register device", "details": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR  # Added status code
             )
+
+
 class UserDevices(APIView):
     permission_classes = [IsAuthenticated]
+
     def get(self, request):
         try:
             user_devices = UserDevice.objects.filter(user=request.user)
@@ -58,7 +69,8 @@ class DeviceLatestStatus(APIView):
         try:
             device = Device.objects.get(device_id=device_id)
             if not UserDevice.objects.filter(user=request.user, device=device).exists():
-                return Response({"error": "Device not found or you don't have access to this device"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"error": "Device not found or you don't have access to this device"},
+                                status=status.HTTP_404_NOT_FOUND)
             serializer = DeviceSerializer(device)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Device.DoesNotExist:
@@ -69,11 +81,13 @@ class DeviceLatestStatus(APIView):
 
 class SensorsDataLatestValues(APIView):
     permission_classes = [IsAuthenticated]
+
     def get(self, request, device_id):
         try:
             device = Device.objects.get(device_id=device_id)
             if not UserDevice.objects.filter(user=request.user, device=device).exists():
-                return Response({"error": "Device not found or you don't have access to this device"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"error": "Device not found or you don't have access to this device"},
+                                status=status.HTTP_404_NOT_FOUND)
             temperature = device.temperature_data.first()
             humidity = device.humidity_data.first()
             moisture = device.moisture_data.first()
