@@ -3,7 +3,11 @@ import os
 from pathlib import Path
 from datetime import datetime
 import paho.mqtt.client as mqtt
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from dotenv import load_dotenv
+
+from devices.models import WaterTank
 
 load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,8 +23,10 @@ def on_connect(client, userdata, flags, rc):
     if rc == 0:
         client.subscribe(MQTT_TOPIC)
 
+
 def on_disconnect(client, userdata, rc):
     pass
+
 
 def on_message(client, userdata, msg):
     from devices.models import Device, TemperatureSensor, HumiditySensor, SoilMoistureSensor, LightIntensitySensor, \
@@ -28,15 +34,36 @@ def on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode())
         if not msg.payload:
-            print(f"Received empty message from topic {msg.topic}")
+            return
         elif msg.topic == "devices/status/all":
-            print(f"Received status update: {payload}")
             d_id = payload.get("device_id")
             status = payload.get("status").strip().lower() == "online"
             Device.objects.update_or_create(
                 device_id=d_id,
                 defaults={"status": status}
             )
+        elif msg.topic == "devices/top_cover":
+            print(f"Received top cover status: {payload}")
+            d_id = payload.get("device_id")
+            value = payload.get("value").strip().lower() == "closed"
+            try:
+                device, created = Device.objects.update_or_create(
+                    device_id=d_id,
+                    defaults={"top_cover": value}
+                )
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    f"device_updates_{d_id}",
+                    {
+                        "type": "top.cover",
+                        "message": {
+                            "device_id": d_id,
+                            "top_cover": value,
+                        },
+                    },
+                )
+            except Exception as e:
+                print(f"Error updating top cover: {e}")
         elif msg.topic.startswith("devices/") and msg.topic.endswith("/sensors"):
             timestamp = datetime.fromisoformat(payload.get("timestamp"))
             d_id = payload.get("device_id", 0)
@@ -73,12 +100,20 @@ def on_message(client, userdata, msg):
                     phosphorus=payload.get("phosphorus"),
                     potassium=payload.get("potassium")
                 )
-            print(f"Received sensor data: {payload}")
+            elif payload.get("tank_type") in ["npk", "irrigation"]:
+                WaterTank.objects.create(
+                    device=device,
+                    timestamp=timestamp,
+                    tank_type=payload.get("tank_type"),
+                    water_level=payload.get("water_level")
+                )
     except Exception as e:
         print(f"Error processing message: {e}")
 
+
 def publish_command(command):
-    client.publish("devices/commands", json.dumps(command), qos=1)
+    pass
+
 
 client = mqtt.Client()
 client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)

@@ -1,7 +1,8 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from notifications.models import Notification, SensorNotification, DiseaseNotification
-from devices.models import TemperatureSensor, HumiditySensor, SoilMoistureSensor, LightIntensitySensor, NPKSensor, Device
+from devices.models import TemperatureSensor, HumiditySensor, SoilMoistureSensor, LightIntensitySensor, NPKSensor, \
+    Device, WaterTank
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
@@ -82,15 +83,33 @@ def new_npk_data(sender, instance, created, **kwargs):
             }
         )
 
+@receiver(post_save, sender=WaterTank)
+def new_water_tank_level_data(sender, instance, created, **kwargs):
+    if created:
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"{instance.device.device_id}",
+            {
+                "type": "water_tanks.data",
+                "device_id": instance.device.device_id,
+                "timestamp": instance.timestamp.isoformat(),
+                "tank_type": instance.tank_type,
+                "water_level": instance.water_level,
+            }
+        )
 
 @receiver(post_save, sender=Device)
-def new_device_status(sender, instance, created, **kwargs):
-    channel_layer = get_channel_layer()
-    async_to_sync(channel_layer.group_send)(
-        f"{instance.device_id}",
-        {
+def device_status(sender, instance, created, **kwargs):
+    try:
+        channel_layer = get_channel_layer()
+        message = {
             "type": "device.status",
             "device_id": instance.device_id,
-            "status": instance.status,
+            "status": instance.status
         }
-    )
+        async_to_sync(channel_layer.group_send)(
+            f"{instance.device_id}",
+            message
+        )
+    except Exception as e:
+        print(f"Error sending device status: {e}")

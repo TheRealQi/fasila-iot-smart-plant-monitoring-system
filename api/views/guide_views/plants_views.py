@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from guide.models import Disease, Plant, PlantDisease
+from guide.serializers import PlantSerializer
 
 
 class PlantsViewAll(APIView):
@@ -76,6 +77,7 @@ class PlantDetailsView(APIView):
 
 class PlantFetchDiseases(APIView):
     permission_classes = [IsAuthenticated]
+
     def get(self, request, plant_id):
         try:
             plant = Plant.objects.get(id=plant_id)
@@ -129,18 +131,19 @@ class PlantFetch2Randoms(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class PlantSearch(APIView):
+class PlantSearchView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
-        try:
-            query = request.GET.get('query', '').strip()
-            plants = Plant.objects.filter(Q(common_name__icontains=query))
-            data = [{
-                "id": plant.id,
-                "botanical_name": plant.botanical_name,
-                "common_name": plant.common_name,
-            } for plant in plants]
-            return Response(data, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        query = request.query_params.get('query', '')
+        if not query:
+            return Response(
+                {'error': 'Query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        plants = Plant.objects.filter(
+            Q(common_name__icontains=query) |
+            Q(botanical_name__icontains=query)
+        )
+        serializer = PlantSerializer(plants, many=True)
+        print(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)

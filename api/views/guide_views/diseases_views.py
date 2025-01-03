@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from guide.models import Disease
+from guide.serializers import DiseaseSerializer
 
 
 class DiseasesViewAll(APIView):
@@ -118,18 +119,20 @@ class DiseaseFetch2Randoms(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class DiseaseSearch(APIView):
+class DiseaseSearchView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        try:
-            query = request.GET.get('query', '').strip()
-            diseases = Disease.objects.filter(Q(name__icontains=query))
-            data = [{
-                "id": disease.id,
-                "name": disease.name,
-            } for disease in diseases]
-            return Response(data, status=status.HTTP_200_OK)
-        except Exception as e:
-            print(query)
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        query = request.query_params.get('query', '')
+        if not query:
+            return Response(
+                {'error': 'Query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        diseases = Disease.objects.filter(
+            name__icontains=query
+        )
+
+        serializer = DiseaseSerializer(diseases, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

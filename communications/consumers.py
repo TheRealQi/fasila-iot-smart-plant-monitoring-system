@@ -79,6 +79,19 @@ class DevicesDataConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             print(f"Error sending sensors data: {str(e)}")
 
+    async def water_tank_data(self, event):
+        try:
+            print(f"Sending water tank data: {event}")
+            await self.send(text_data=json.dumps({
+                "type": event["type"],
+                "device_id": event["device_id"],
+                "timestamp": event["timestamp"],
+                "tank_type": event["tank_type"],
+                "water_level": event["water_level"]
+            }))
+        except Exception as e:
+            print(f"Error sending water tank data: {str(e)}")
+
     async def notification(self, event):
         try:
             notification_data = event.copy()
@@ -93,9 +106,7 @@ class DevicesDataConsumer(AsyncWebsocketConsumer):
 
     async def device_status(self, event):
         try:
-            await self.send(text_data=json.dumps({
-                "type": event["type"],
-                "status": event["status"],
-            }))
+            print(f"Sending device status: {event}")
+            await self.send(text_data=json.dumps(event))
         except Exception as e:
             print(f"Error sending device status: {str(e)}")

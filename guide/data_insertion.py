@@ -551,8 +551,9 @@ for chemical in chemical_controls:
         application_methods=chemical["application_methods"]
     )
 
+from guide.models import Plant, PlantDisease, Disease
 
 plant = Plant.objects.get(id=1)
-disease = Disease.objects.get(id=5)
+disease = Disease.objects.get(id=12)
 plant_disease = PlantDisease(plant=plant, disease=disease)
 plant_disease.save()

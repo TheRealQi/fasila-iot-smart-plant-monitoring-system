@@ -16,6 +16,7 @@ class Notification(models.Model):
     TYPE_CHOICES = [
         ('disease', 'Disease'),
         ('sensor', 'Sensor'),
+        ('water_tank', 'Water Tank'),
         ('other', 'Other')
     ]
     id = models.AutoField(primary_key=True)
@@ -47,6 +48,16 @@ class SensorNotification(models.Model):
                                         primary_key=True)
     sensor_type = models.CharField(max_length=255, choices=SENSOR_CHOICES)
 
+
+class WaterTankNotification(models.Model):
+    TYPE_CHOICES = [
+        ('irrigation', 'Irrigation'),
+        ('npk', 'NPK'),
+    ]
+    notification = models.OneToOneField(Notification, on_delete=models.CASCADE, related_name='water_tank_notification',
+                                        primary_key=True)
+    tank_type = models.CharField(max_length=255, choices=TYPE_CHOICES, default='irrigation')
+    water_level = models.FloatField(default=0.0)
 
 class UserFCMTokens(models.Model):
     user = models.ForeignKey('users.CustomUser', on_delete=models.CASCADE)

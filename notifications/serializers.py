@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Notification, DiseaseNotification, SensorNotification, UserFCMTokens
+from .models import Notification, DiseaseNotification, SensorNotification, UserFCMTokens, WaterTankNotification
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -18,6 +18,13 @@ class SensorNotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = SensorNotification
         fields = '__all__'
+
+
+class WaterTankNotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WaterTankNotification
+        fields = '__all__'
+
 
 class UserFCMTokensSerializer(serializers.ModelSerializer):
     class Meta:

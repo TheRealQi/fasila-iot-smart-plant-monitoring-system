@@ -1,9 +1,11 @@
+from django.utils import timezone
+from datetime import datetime
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from devices.models import Device, UserDevice
-from devices.serializers import DeviceSerializer
+from devices.models import Device, UserDevice, DeviceDisease
+from devices.serializers import DeviceSerializer, WaterTankSerializer
 from devices.serializers import TemperatureSensorSerializer, HumiditySensorSerializer, SoilMoistureSensorSerializer, \
     LightIntensitySensorSerializer, NPKSensorSerializer
 
@@ -81,7 +83,6 @@ class DeviceLatestStatus(APIView):
 
 class SensorsDataLatestValues(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request, device_id):
         try:
             device = Device.objects.get(device_id=device_id)
@@ -93,15 +94,87 @@ class SensorsDataLatestValues(APIView):
             moisture = device.moisture_data.first()
             light_intensity = device.light_data.first()
             nutrient = device.nutrient_data.first()
+            irrigation_water_tank = device.water_tank_data.filter(tank_type='irrigation').first()
+            npk_water_tank = device.water_tank_data.filter(tank_type='npk').first()
             data = {
                 "temperature": TemperatureSensorSerializer(temperature).data if temperature else None,
                 "humidity": HumiditySensorSerializer(humidity).data if humidity else None,
                 "moisture": SoilMoistureSensorSerializer(moisture).data if moisture else None,
                 "light_intensity": LightIntensitySensorSerializer(light_intensity).data if light_intensity else None,
                 "nutrient": NPKSensorSerializer(nutrient).data if nutrient else None,
+                "irrigation_water_tank": WaterTankSerializer(irrigation_water_tank).data if irrigation_water_tank else None,
+                "npk_water_tank": WaterTankSerializer(npk_water_tank).data if npk_water_tank else None,
             }
             return Response(data, status=status.HTTP_200_OK)
         except Device.DoesNotExist:
             return Response({"error": "Device not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DeviceHealthStatus(APIView):
+    permission_classes = [IsAuthenticated]
+    def put(self, request, device_id):
+        try:
+            device = Device.objects.get(device_id=device_id)
+            if not UserDevice.objects.filter(user=request.user, device=device).exists():
+                return Response(
+                    {"error": "Device not found or you don't have access to this device"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            health_status = request.data.get('health_status')
+            if health_status is None:
+                return Response(
+                    {"error": "health_status field is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if not isinstance(health_status, bool):
+                return Response(
+                    {"error": "health_status must be a boolean value"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            device.health_status = health_status
+            device.save()
+            return Response({
+                "message": "Device health status updated successfully",
+                "health_status": device.health_status
+            }, status=status.HTTP_200_OK)
+
+        except Device.DoesNotExist:
+            return Response(
+                {"error": "Device not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Unable to update device health status: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class DeviceDiseaseDetectionView(APIView):
+    def get(self, request, device_id):
+        try:
+            today = timezone.now().date()
+            detections = DeviceDisease.objects.filter(
+                device__device_id=device_id,
+                timestamp__date=today
+            ).select_related('disease').order_by('-timestamp')
+            response_data = []
+            for detection in detections:
+                response_data.append({
+                    'id': detection.id,
+                    'disease_name': detection.disease.name,
+                    'disease_image_url': detection.disease_image_url,
+                    'timestamp': detection.timestamp,
+                    'disease_id': detection.disease.id
+                })
+            return Response({
+                'success': True,
+                'detections': response_data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

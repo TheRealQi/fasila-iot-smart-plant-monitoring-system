@@ -9,16 +9,16 @@ from django.http import JsonResponse
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from devices.models import Device, UserDevice
+from devices.models import Device, UserDevice, DeviceDisease
 from guide.models import Disease
-from notifications.models import Notification, DiseaseNotification, SensorNotification
+from notifications.models import Notification, DiseaseNotification, SensorNotification, WaterTankNotification
 from notifications.serializers import NotificationSerializer, DiseaseNotificationSerializer, \
-    SensorNotificationSerializer
+    SensorNotificationSerializer, WaterTankNotificationSerializer
 from notifications.services import get_fcm_tokens_by_device_id
 from uuid import uuid4
 
 
-class SendNotificationView(APIView):
+class BaseNotificationView(APIView):
     permission_classes = [AllowAny]
 
     def upload_image_to_s3(self, image_file, device_id):
@@ -29,7 +29,7 @@ class SendNotificationView(APIView):
             region_name=settings.AWS_S3_REGION_NAME
         )
         file_extension = os.path.splitext(image_file.name)[1]
-        unique_filename = f"notifications/detected_diseases/{device_id}/{datetime.datetime.now()}/{uuid4()}{file_extension}"
+        unique_filename = f"notifications/detected_diseases/{device_id}/{datetime.datetime.today().date()}/{uuid4()}{file_extension}"
         try:
             s3_client.upload_fileobj(
                 image_file,
@@ -37,18 +37,15 @@ class SendNotificationView(APIView):
                 unique_filename,
                 ExtraArgs={'ContentType': image_file.content_type}
             )
-            image_url = f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{unique_filename}"
-            return image_url
+            return f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{unique_filename}"
         except Exception as e:
             return None
 
     def send_websocket_notification(self, device_id, notification_data):
         try:
-            # Get the notification type and ID
             notification_type = notification_data.get("notification_type")
             notification_id = notification_data.get("id")
 
-            # Create notification with unquoted keys using dict constructor
             formatted_notification = dict(
                 id=notification_id,
                 notification_type=notification_type,
@@ -59,8 +56,6 @@ class SendNotificationView(APIView):
                 timestamp=notification_data.get("timestamp"),
                 device_id=notification_data.get("device_id")
             )
-
-            # Add type-specific details with unquoted keys
             if notification_type == "sensor":
                 sensor_notification = SensorNotification.objects.filter(
                     notification_id=notification_id
@@ -70,7 +65,6 @@ class SendNotificationView(APIView):
                         notification=notification_id,
                         sensor_type=sensor_notification.sensor_type
                     )
-
             elif notification_type == "disease":
                 disease_notification = DiseaseNotification.objects.filter(
                     notification_id=notification_id
@@ -82,7 +76,6 @@ class SendNotificationView(APIView):
                         disease_image_url=disease_notification.disease_image_url
                     )
 
-            # Send the formatted notification through websocket
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
                 f"{device_id}",
@@ -95,114 +88,242 @@ class SendNotificationView(APIView):
         except Exception as e:
             print(f"WebSocket notification error: {str(e)}")
 
+    def validate_device(self, device_id):
+        if not device_id or device_id.strip() == "":
+            return None, "Device ID cannot be empty."
+        try:
+            device = Device.objects.get(device_id=device_id)
+            return device, None
+        except Device.DoesNotExist:
+            return None, "Invalid device ID."
+
+    def send_fcm_notification(self, device_id, title, message, image_url=None):
+        fcm_tokens = get_fcm_tokens_by_device_id(device_id)
+        if fcm_tokens:
+            fcm_message = messaging.MulticastMessage(
+                notification=messaging.Notification(
+                    title=title,
+                    body=message,
+                ),
+                tokens=fcm_tokens
+            )
+            if image_url:
+                fcm_message.notification.image = image_url
+            messaging.send_each_for_multicast(fcm_message)
+
+
+class DiseaseNotificationView(BaseNotificationView):
+    def send_healthy_status(self, device_id):
+        try:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"{device_id}",
+                {
+                    "type": "device.status",
+                    "device_id": device_id,
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "healthy": False
+                }
+            )
+        except Exception as e:
+            print(f"WebSocket notification error: {str(e)}")
+
     def post(self, request):
         try:
             device_id = request.data.get('device_id')
-            notification_type = request.data.get('notification_type')
+            title = request.data.get('title')
+            message = request.data.get('message')
+            severity = request.data.get('severity', 'low')
+            image_file = request.data.get('disease_image')
+            disease_id = request.data.get('disease_id')
+
+            device, error = self.validate_device(device_id)
+            if error:
+                return JsonResponse({"success": False, "error": error}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not image_file:
+                return JsonResponse(
+                    {"success": False, "error": "Disease image is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            disease_img_url = self.upload_image_to_s3(image_file, device_id)
+            if not disease_img_url:
+                return JsonResponse(
+                    {"success": False, "error": "Failed to upload image."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            disease = Disease.objects.get(id=disease_id)
+            if not disease:
+                return JsonResponse(
+                    {"success": False, "error": "Disease not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            disease_detection = DeviceDisease.objects.create(
+                device=device,
+                disease=disease,
+                disease_image_url=disease_img_url
+            )
+
+            Device.objects.update(
+                healthy=False
+            )
+            self.send_healthy_status(device_id)
+
+            notification = Notification.objects.create(
+                device_id=device,
+                notification_type='disease',
+                title=title,
+                message=message,
+                severity=severity
+            )
+
+            disease_notification = DiseaseNotification.objects.create(
+                notification=notification,
+                disease_id=disease_id,
+                disease_image_url=disease_img_url
+            )
+
+            notification_data = NotificationSerializer(notification).data
+            disease_notification_data = DiseaseNotificationSerializer(disease_notification).data
+            response_data = {**notification_data, **disease_notification_data}
+
+            self.send_websocket_notification(device_id, response_data)
+            self.send_fcm_notification(device_id, title, message, disease_img_url)
+
+            return JsonResponse(
+                {"success": True, "notification": response_data},
+                status=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SensorNotificationView(BaseNotificationView):
+    def post(self, request):
+        try:
+            device_id = request.data.get('device_id')
+            title = request.data.get('title')
+            message = request.data.get('message')
+            severity = request.data.get('severity', 'low')
+            sensor_type = request.data.get('sensor_type')
+
+            device, error = self.validate_device(device_id)
+            if error:
+                return JsonResponse({"success": False, "error": error}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not sensor_type or sensor_type.strip() == "":
+                return JsonResponse(
+                    {"success": False, "error": "Sensor type is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            notification = Notification.objects.create(
+                device_id=device,
+                notification_type='sensor',
+                title=title,
+                message=message,
+                severity=severity
+            )
+
+            sensor_notification = SensorNotification.objects.create(
+                notification=notification,
+                sensor_type=sensor_type
+            )
+
+            notification_data = NotificationSerializer(notification).data
+            sensor_notification_data = SensorNotificationSerializer(sensor_notification).data
+            response_data = {**notification_data, **sensor_notification_data}
+
+            self.send_websocket_notification(device_id, response_data)
+            self.send_fcm_notification(device_id, title, message)
+
+            return JsonResponse(
+                {"success": True, "notification": response_data},
+                status=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class WaterTankNotificationView(BaseNotificationView):
+    def post(self, request):
+        try:
+            device_id = request.data.get('device_id')
+            title = request.data.get('title')
+            message = request.data.get('message')
+            severity = request.data.get('severity', 'low')
+            tank_type = request.data.get('tank_type')
+            water_level = request.data.get('water_level')
+
+            device, error = self.validate_device(device_id)
+            if error:
+                return JsonResponse({"success": False, "error": error}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not tank_type or tank_type.strip() == "":
+                return JsonResponse(
+                    {"success": False, "error": "Tank type is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if water_level is None:
+                return JsonResponse(
+                    {"success": False, "error": "Water level is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            notification = Notification.objects.create(
+                device_id=device,
+                notification_type='water_tank',
+                title=title,
+                message=message,
+                severity=severity
+            )
+            water_tank_notification = WaterTankNotification.objects.create(
+                notification=notification,
+                tank_type=tank_type,
+                water_level=water_level
+            )
+            notification_data = NotificationSerializer(notification).data
+            water_tank_notification_data = WaterTankNotificationSerializer(water_tank_notification).data
+            response_data = {**notification_data, **water_tank_notification_data}
+            self.send_websocket_notification(device_id, response_data)
+            self.send_fcm_notification(device_id, title, message)
+            return JsonResponse(
+                {"success": True, "notification": response_data},
+                status=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GeneralNotificationView(BaseNotificationView):
+    def post(self, request):
+        try:
+            device_id = request.data.get('device_id')
             title = request.data.get('title')
             message = request.data.get('message')
             severity = request.data.get('severity', 'low')
 
-            if notification_type not in ['disease', 'sensor', 'other']:
-                return JsonResponse(
-                    {"success": False, "error": "Invalid notification type."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            if message is None or message.strip() == "":
-                return JsonResponse(
-                    {"success": False, "error": "Message cannot be empty."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            if device_id is None or device_id.strip() == "":
-                return JsonResponse(
-                    {"success": False, "error": "Device ID cannot be empty."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            device, error = self.validate_device(device_id)
+            if error:
+                return JsonResponse({"success": False, "error": error}, status=status.HTTP_400_BAD_REQUEST)
 
-            device = Device.objects.get(device_id=device_id)
-            if device is None:
-                return JsonResponse(
-                    {"success": False, "error": "Invalid device ID."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            notification = Notification.objects.create(
+                device_id=device,
+                notification_type='other',
+                title=title,
+                message=message,
+                severity=severity
+            )
 
-            if notification_type.lower() == 'disease':
-                image_file = request.data.get('disease_image')
-                disease_id = request.data.get('disease_id')
-                if image_file is None:
-                    return JsonResponse(
-                        {"success": False, "error": "Disease image is required."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                disease_img_url = self.upload_image_to_s3(image_file, device_id)
-                if disease_img_url is None:
-                    return JsonResponse(
-                        {"success": False, "error": "Failed to upload image."},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
-                notification = Notification.objects.create(
-                    device_id=device,
-                    notification_type='disease',
-                    title=title,
-                    message=message,
-                    severity=severity
-                )
-                disease_notification = DiseaseNotification.objects.create(
-                    notification=notification,
-                    disease_id=disease_id,
-                    disease_image_url=disease_img_url
-                )
-                notification_data = NotificationSerializer(notification).data
-                disease_notification_data = DiseaseNotificationSerializer(disease_notification).data
-                response_data = {**notification_data, **disease_notification_data}
+            notification_data = NotificationSerializer(notification).data
 
-            elif notification_type.lower() == 'sensor':
-                sensor_type = request.data.get('sensor_type')
-                if sensor_type is None or sensor_type.strip() == "":
-                    return JsonResponse(
-                        {"success": False, "error": "Sensor type is required."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                notification = Notification.objects.create(
-                    device_id=device,
-                    notification_type='sensor',
-                    title=title,
-                    message=message,
-                    severity=severity
-                )
-                sensor_notification = SensorNotification.objects.create(
-                    notification=notification,
-                    sensor_type=sensor_type
-                )
-                notification_data = NotificationSerializer(notification).data
-                sensor_notification_data = SensorNotificationSerializer(sensor_notification).data
-                response_data = {**notification_data, **sensor_notification_data}
+            self.send_websocket_notification(device_id, notification_data)
+            self.send_fcm_notification(device_id, title, message)
 
-            else:
-                notification = Notification.objects.create(
-                    device_id=device,
-                    notification_type='other',
-                    title=title,
-                    message=message,
-                    severity=severity
-                )
-                notification_serializer = NotificationSerializer(notification)
-                response_data = notification_serializer.data
-            self.send_websocket_notification(device_id, response_data)
-            fcm_tokens = get_fcm_tokens_by_device_id(device_id)
-            if fcm_tokens:
-                fcm_message = messaging.MulticastMessage(
-                    notification=messaging.Notification(
-                        title=title,
-                        body=message,
-                    ),
-                    tokens=fcm_tokens
-                )
-                if notification_type.lower() == 'disease' and disease_img_url:
-                    fcm_message.notification.image = disease_img_url
-                messaging.send_each_for_multicast(fcm_message)
             return JsonResponse(
-                {"success": True, "notification": response_data},
+                {"success": True, "notification": notification_data},
                 status=status.HTTP_201_CREATED
             )
         except Exception as e:
