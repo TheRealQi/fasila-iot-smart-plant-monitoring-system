@@ -1,4 +1,5 @@
 import datetime
+from datetime import datetime as dt
 import os
 import boto3
 from asgiref.sync import async_to_sync
@@ -136,6 +137,8 @@ class DiseaseNotificationView(BaseNotificationView):
             severity = request.data.get('severity', 'low')
             image_file = request.data.get('disease_image')
             disease_id = request.data.get('disease_id')
+            timestamp = request.data.get('timestamp')
+            timestamp = datetime.datetime.fromisoformat(timestamp)
 
             device, error = self.validate_device(device_id)
             if error:
@@ -164,7 +167,8 @@ class DiseaseNotificationView(BaseNotificationView):
             disease_detection = DeviceDisease.objects.create(
                 device=device,
                 disease=disease,
-                disease_image_url=disease_img_url
+                disease_image_url=disease_img_url,
+                timestamp=timestamp
             )
 
             Device.objects.update(

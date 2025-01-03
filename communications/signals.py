@@ -83,21 +83,6 @@ def new_npk_data(sender, instance, created, **kwargs):
             }
         )
 
-@receiver(post_save, sender=WaterTank)
-def new_water_tank_level_data(sender, instance, created, **kwargs):
-    if created:
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f"{instance.device.device_id}",
-            {
-                "type": "water_tanks.data",
-                "device_id": instance.device.device_id,
-                "timestamp": instance.timestamp.isoformat(),
-                "tank_type": instance.tank_type,
-                "water_level": instance.water_level,
-            }
-        )
-
 @receiver(post_save, sender=Device)
 def device_status(sender, instance, created, **kwargs):
     try:

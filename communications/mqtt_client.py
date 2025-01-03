@@ -53,13 +53,11 @@ def on_message(client, userdata, msg):
                 )
                 channel_layer = get_channel_layer()
                 async_to_sync(channel_layer.group_send)(
-                    f"device_updates_{d_id}",
+                    f"{d_id}",
                     {
-                        "type": "top.cover",
-                        "message": {
-                            "device_id": d_id,
-                            "top_cover": value,
-                        },
+                        "type": "device.status",
+                        "device_id": d_id,
+                        "top_cover": value,
                     },
                 )
             except Exception as e:
@@ -101,11 +99,25 @@ def on_message(client, userdata, msg):
                     potassium=payload.get("potassium")
                 )
             elif payload.get("tank_type") in ["npk", "irrigation"]:
-                WaterTank.objects.create(
-                    device=device,
-                    timestamp=timestamp,
-                    tank_type=payload.get("tank_type"),
-                    water_level=payload.get("water_level")
+                try:
+                    WaterTank.objects.create(
+                        device=device,
+                        timestamp=timestamp,
+                        tank_type=payload.get("tank_type"),
+                        water_level=payload.get("water_level")
+                    )
+                except Exception as e:
+                    print(f"Error creating water tank: {e}")
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    f"{d_id}",
+                    {
+                        "type": "water_tanks.data",
+                        "device_id": d_id,
+                        "timestamp": timestamp.isoformat(),
+                        "tank_type": payload.get("tank_type"),
+                        "water_level": payload.get("water_level")
+                    }
                 )
     except Exception as e:
         print(f"Error processing message: {e}")

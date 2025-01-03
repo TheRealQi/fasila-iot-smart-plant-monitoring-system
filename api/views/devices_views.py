@@ -1,13 +1,16 @@
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.utils import timezone
 from datetime import datetime
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from devices.models import Device, UserDevice, DeviceDisease
 from devices.serializers import DeviceSerializer, WaterTankSerializer
 from devices.serializers import TemperatureSensorSerializer, HumiditySensorSerializer, SoilMoistureSensorSerializer, \
     LightIntensitySensorSerializer, NPKSensorSerializer
+import datetime
 
 
 class RegisterUserDevice(APIView):
@@ -94,8 +97,8 @@ class SensorsDataLatestValues(APIView):
             moisture = device.moisture_data.first()
             light_intensity = device.light_data.first()
             nutrient = device.nutrient_data.first()
-            irrigation_water_tank = device.water_tank_data.filter(tank_type='irrigation').first()
-            npk_water_tank = device.water_tank_data.filter(tank_type='npk').first()
+            irrigation_water_tank = device.water_tank_data.filter(tank_type='irrigation').order_by('-timestamp').first()
+            npk_water_tank = device.water_tank_data.filter(tank_type='npk').order_by('-timestamp').first()
             data = {
                 "temperature": TemperatureSensorSerializer(temperature).data if temperature else None,
                 "humidity": HumiditySensorSerializer(humidity).data if humidity else None,
@@ -155,26 +158,64 @@ class DeviceHealthStatus(APIView):
 class DeviceDiseaseDetectionView(APIView):
     def get(self, request, device_id):
         try:
-            today = timezone.now().date()
-            detections = DeviceDisease.objects.filter(
-                device__device_id=device_id,
-                timestamp__date=today
-            ).select_related('disease').order_by('-timestamp')
-            response_data = []
-            for detection in detections:
-                response_data.append({
-                    'id': detection.id,
-                    'disease_name': detection.disease.name,
-                    'disease_image_url': detection.disease_image_url,
-                    'timestamp': detection.timestamp,
-                    'disease_id': detection.disease.id
-                })
+            latest_detection = DeviceDisease.objects.filter(
+                device__device_id=device_id
+            ).order_by('-timestamp').first()
+            if latest_detection:
+                latest_timestamp = latest_detection.timestamp
+                latest_detections = DeviceDisease.objects.filter(
+                    device__device_id=device_id,
+                    timestamp=latest_timestamp
+                ).select_related('disease')
+                response_data = [
+                    {
+                        'id': detection.id,
+                        'disease_name': detection.disease.name,
+                        'disease_image_url': detection.disease_image_url,
+                        'timestamp': detection.timestamp,
+                        'disease_id': detection.disease.id
+                    }
+                    for detection in latest_detections
+                ]
+                return Response({
+                    'success': True,
+                    'detections': response_data
+                }, status=status.HTTP_200_OK)
             return Response({
                 'success': True,
-                'detections': response_data
+                'detections': []
             }, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({
                 'success': False,
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class UpdateDeviceHealthyStatusView(APIView):
+    permission_classes = [AllowAny]
+    def get(self, request, device_id):
+        try:
+            device = Device.objects.get(device_id=device_id)
+            device.health_status = True
+            device.save()
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"{device_id}",
+                {
+                    "type": "device.status",
+                    "device_id": device_id,
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "healthy": True
+                }
+            )
+            return Response({
+                "message": "Device health status updated successfully",
+                "health_status": device.health_status
+            }, status=status.HTTP_200_OK)
+        except Device.DoesNotExist:
+            return Response({"error": "Device not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

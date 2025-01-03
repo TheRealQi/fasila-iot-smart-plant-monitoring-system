@@ -79,11 +79,11 @@ class DevicesDataConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             print(f"Error sending sensors data: {str(e)}")
 
-    async def water_tank_data(self, event):
+    async def water_tanks_data(self, event):
         try:
             print(f"Sending water tank data: {event}")
             await self.send(text_data=json.dumps({
-                "type": event["type"],
+                "type": "water_tanks.data",
                 "device_id": event["device_id"],
                 "timestamp": event["timestamp"],
                 "tank_type": event["tank_type"],

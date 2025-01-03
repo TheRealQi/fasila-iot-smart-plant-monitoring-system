@@ -37,7 +37,16 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL = 'users.CustomUser'
 
 DATABASES = {
-    'default': dj_database_url.config(default=os.getenv('DATABASE_URL'), conn_max_age=600)
+    'default': dj_database_url.config(
+        default=os.getenv('DATABASE_URL'),
+        conn_max_age=0,
+        engine='django_db_geventpool.backends.postgresql_psycopg2'
+    )
+}
+
+DATABASES['default']['OPTIONS'] = {
+    'MAX_CONNS': 15,
+    'MIN_CONNS': 1,
 }
 
 MIDDLEWARE = [

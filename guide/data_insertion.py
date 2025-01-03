@@ -450,7 +450,7 @@ chemical_controls = [
     },
     {
         "name": "Copper Oxychloride 50% WP",
-        # Anthracnose, Bacterial Spot, Gummy Stem Blight, Septoria Leaf Spot, Late Blight
+        # Anthracnose, Downy Mildew, Gummy Stem Blight, Septoria Leaf Spot, Late Blight,
         "type": "Fungicide/Bactericide",
         "active_ingredients": "Copper Oxychloride",
         "application_methods": [
@@ -551,9 +551,25 @@ for chemical in chemical_controls:
         application_methods=chemical["application_methods"]
     )
 
-from guide.models import Plant, PlantDisease, Disease
+# from guide.models import Plant, PlantDisease, Disease
+#
+# plant = Plant.objects.get(id=1)
+# disease = Disease.objects.get(id=12)
+# plant_disease = PlantDisease(plant=plant, disease=disease)
+# plant_disease.save()
 
-plant = Plant.objects.get(id=1)
-disease = Disease.objects.get(id=12)
-plant_disease = PlantDisease(plant=plant, disease=disease)
-plant_disease.save()
+
+from guide.models import ChemicalControl, Disease, DiseaseRecommendedAction
+
+disease = Disease.objects.get(id=2)
+actions = [
+    "Double check the plant with images of the disease to confirm the diagnosis",
+    "Fully remove and destroy infected plant immediately",
+    "Sanitize tools and equipment",
+    "This disease can't be controlled by chemical means",
+]
+
+chemical_control = ChemicalControl.objects.get(id=3)
+
+disease_recommended_action = DiseaseRecommendedAction(disease=disease, actions=actions)
+disease_recommended_action.save()

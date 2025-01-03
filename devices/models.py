@@ -106,7 +106,7 @@ class WaterTank(models.Model):
         return f'Water Level {self.water_level} from Device {self.device} at {self.timestamp} for {self.tank_type}'
 
     class Meta:
-        ordering = ['-timestamp']
+        ordering = ['-timestamp', 'tank_type']
 
 
 class DeviceDisease(models.Model):

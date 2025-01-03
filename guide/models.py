@@ -56,7 +56,6 @@ class Disease(models.Model):
     causes = models.JSONField(default=list, blank=True)
     cultural_control = models.JSONField(default=list)
     chemical_control = models.ManyToManyField('ChemicalControl')
-    organic_control = models.ManyToManyField('OrganicControl')
     prevention = models.JSONField(default=list, blank=True)
     image_urls = models.JSONField(default=list, blank=True)
 
@@ -78,19 +77,8 @@ class ChemicalControl(models.Model):
     application_methods = models.JSONField(default=list)
 
 
-class OrganicControl(models.Model):
-    id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=255)
-    active_ingredients = models.JSONField(default=list)
-    preparation_steps = models.JSONField(default=list)
-    application_methods = models.JSONField(default=list)
-
-    def __str__(self):
-        return self.name
-
 
 class DiseaseRecommendedAction(models.Model):
     disease = models.ForeignKey(Disease, on_delete=models.CASCADE)
     actions = models.JSONField(default=list)
     recommended_chemical_medicine = models.ForeignKey(ChemicalControl, on_delete=models.CASCADE, blank=True, null=True)
-    recommended_organic_medicine = models.ForeignKey(OrganicControl, on_delete=models.CASCADE, blank=True, null=True)
