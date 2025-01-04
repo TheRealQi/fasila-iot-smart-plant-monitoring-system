@@ -200,7 +200,7 @@ class UpdateDeviceHealthyStatusView(APIView):
     def post(self, request, device_id):  # Add POST method
         try:
             device = Device.objects.get(device_id=device_id)
-            device.health_status = True
+            device.healthy = True
             device.save()
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
