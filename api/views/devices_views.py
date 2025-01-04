@@ -214,7 +214,7 @@ class UpdateDeviceHealthyStatusView(APIView):
             )
             return Response({
                 "message": "Device health status updated successfully",
-                "health_status": device.health_status
+                "health_status": device.healthy
             }, status=status.HTTP_200_OK)
         except Device.DoesNotExist:
             return Response({"error": "Device not found"}, status=status.HTTP_404_NOT_FOUND)
