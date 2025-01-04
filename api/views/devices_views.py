@@ -196,7 +196,8 @@ class DeviceDiseaseDetectionView(APIView):
 
 class UpdateDeviceHealthyStatusView(APIView):
     permission_classes = [AllowAny]
-    def put(self, request, device_id):
+    
+    def post(self, request, device_id):  # Add POST method
         try:
             device = Device.objects.get(device_id=device_id)
             device.health_status = True
@@ -219,3 +220,6 @@ class UpdateDeviceHealthyStatusView(APIView):
             return Response({"error": "Device not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def patch(self, request, device_id):
+        return self.post(request, device_id) 
