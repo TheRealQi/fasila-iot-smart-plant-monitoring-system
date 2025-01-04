@@ -40,7 +40,7 @@ class BaseNotificationView(APIView):
             )
             return f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{unique_filename}"
         except Exception as e:
-            return None
+            print(e)
 
     def send_websocket_notification(self, device_id, notification_data):
         try:
