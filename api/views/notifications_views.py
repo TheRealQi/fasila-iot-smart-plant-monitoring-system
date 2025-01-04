@@ -116,6 +116,7 @@ class BaseNotificationView(APIView):
 class DiseaseNotificationView(BaseNotificationView):
     def send_healthy_status(self, device_id):
         try:
+            print(f"Sending healthy status update for device_id: {device_id}")
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
                 f"{device_id}",
@@ -127,10 +128,11 @@ class DiseaseNotificationView(BaseNotificationView):
                 }
             )
         except Exception as e:
-            print(f"WebSocket notification error: {str(e)}")
+            print(f"WebSocket notification error in send_healthy_status: {str(e)}")
 
     def post(self, request):
         try:
+            print("Received request data:", request.data)
             device_id = request.data.get('device_id')
             title = request.data.get('title')
             message = request.data.get('message')
@@ -138,44 +140,58 @@ class DiseaseNotificationView(BaseNotificationView):
             image_file = request.data.get('disease_image')
             disease_id = request.data.get('disease_id')
             timestamp = request.data.get('timestamp')
-            timestamp = datetime.datetime.fromisoformat(timestamp)
 
+            print("Parsed values:", device_id, title, message, severity, disease_id, timestamp)
+
+            # Parse timestamp and validate device
+            timestamp = datetime.datetime.fromisoformat(timestamp)
             device, error = self.validate_device(device_id)
             if error:
+                print("Device validation error:", error)
                 return JsonResponse({"success": False, "error": error}, status=status.HTTP_400_BAD_REQUEST)
 
             if not image_file:
+                print("Disease image not provided in the request.")
                 return JsonResponse(
                     {"success": False, "error": "Disease image is required."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            # Upload image to S3
             disease_img_url = self.upload_image_to_s3(image_file, device_id)
             if not disease_img_url:
+                print("Failed to upload image to S3.")
                 return JsonResponse(
                     {"success": False, "error": "Failed to upload image."},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
-            disease = Disease.objects.get(id=disease_id)
-            if not disease:
+            # Fetch disease details
+            try:
+                disease = Disease.objects.get(id=disease_id)
+                print("Fetched disease:", disease)
+            except Disease.DoesNotExist:
+                print(f"Disease with ID {disease_id} not found.")
                 return JsonResponse(
                     {"success": False, "error": "Disease not found."},
                     status=status.HTTP_404_NOT_FOUND
                 )
 
+            # Record disease detection
             disease_detection = DeviceDisease.objects.create(
                 device=device,
                 disease=disease,
                 disease_image_url=disease_img_url,
                 timestamp=timestamp
             )
+            print("Created DeviceDisease record:", disease_detection)
 
-            Device.objects.update(
-                healthy=False
-            )
-            self.send_healthy_status(device_id)
+            # Update device status
+            device.healthy = False
+            device.save()
+            print(f"Updated device {device_id} healthy status to False.")
 
+            # Create notification records
             notification = Notification.objects.create(
                 device_id=device,
                 notification_type='disease',
@@ -183,16 +199,20 @@ class DiseaseNotificationView(BaseNotificationView):
                 message=message,
                 severity=severity
             )
+            print("Created Notification record:", notification)
 
             disease_notification = DiseaseNotification.objects.create(
                 notification=notification,
                 disease_id=disease_id,
                 disease_image_url=disease_img_url
             )
+            print("Created DiseaseNotification record:", disease_notification)
 
+            # Serialize and send notifications
             notification_data = NotificationSerializer(notification).data
             disease_notification_data = DiseaseNotificationSerializer(disease_notification).data
             response_data = {**notification_data, **disease_notification_data}
+            print("Serialized response data:", response_data)
 
             self.send_websocket_notification(device_id, response_data)
             self.send_fcm_notification(device_id, title, message, disease_img_url)
@@ -202,6 +222,7 @@ class DiseaseNotificationView(BaseNotificationView):
                 status=status.HTTP_201_CREATED
             )
         except Exception as e:
+            print("Exception occurred:", str(e))
             return JsonResponse({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
