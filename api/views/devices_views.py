@@ -196,7 +196,7 @@ class DeviceDiseaseDetectionView(APIView):
 
 class UpdateDeviceHealthyStatusView(APIView):
     permission_classes = [AllowAny]
-    def get(self, request, device_id):
+    def put(self, request, device_id):
         try:
             device = Device.objects.get(device_id=device_id)
             device.health_status = True
