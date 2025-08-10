@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "398609246787",
+    "firebase_url": "https://fasila-c9591-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "fasila-c9591",
+    "storage_bucket": "fasila-c9591.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:398609246787:android:94772957f29f47ab8642f6",
+        "android_client_info": {
+          "package_name": "com.fasila"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAqh0iR9PTOB4NUkWyC4s2qraPlFJ3E3Ng"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
