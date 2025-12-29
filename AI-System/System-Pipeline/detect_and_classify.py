@@ -137,6 +137,7 @@ def send_disease_notification(image_file_path, disease_id, device_id, timestamp)
     except Exception as e:
         print(f"Error: Unexpected error while sending notification - {str(e)}")
         return None
+    
 def send_healthy_status(device_id):
     url = apiURL + f"/devices/{device_id}/healthy-status/"
     response = requests.patch(url)  # Change to PATCH
@@ -145,20 +146,16 @@ def send_healthy_status(device_id):
     else:
         return {"success": False, "status_code": response.status_code, "response": response.json()}
 
-def detection(directory_path):
+def detection(image_path):
     yolo_model = YOLO("best (6).pt")
     if os.path.exists(cropped_images_dir):
         shutil.rmtree(cropped_images_dir)
-    results = yolo_model.predict(source=directory_path, conf=0.7)
+    results = yolo_model.predict(source=image_path, conf=0.7)
     for result in results:
         result.save_crop(save_dir=cropped_images_dir)
 
 
-
-
-
-
-# Function to preprocess and classify images using tensorflow model
+# Function to preprocess and classify cropped images using tensorflow model
 def classify_cropped_images():
     timestamp = datetime.now(pytz.UTC).isoformat()
     # Load TensorFlow classification model
@@ -235,7 +232,6 @@ def classify_cropped_images():
         send_healthy_status(1)
 
 
-
 def get_latest_image(directory):
     files = [
         os.path.join(directory, f)
@@ -251,7 +247,6 @@ def get_latest_image(directory):
 
 
 if __name__ == "__main__":
-
     try:
         latest_image_path = get_latest_image(original_images_dir)
         print(f"Processing latest image: {latest_image_path}")

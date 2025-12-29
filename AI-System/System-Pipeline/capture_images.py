@@ -31,7 +31,7 @@ if ret:
     print(f"Image saved at: {filepath}")
 
     # Run detect_classify.py after saving the image
-    subprocess.run(["python3", "/home/qpi/ai_project_pipeline/captureDetect1.py"])
+    subprocess.run(["python3", "/home/qpi/ai_project_pipeline/detect_and_classify.py"])
 
 else:
     print("Error: Could not capture an image.")
