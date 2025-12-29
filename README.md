@@ -1,171 +1,215 @@
-# Fasila - Smart Plant Monitoring System
+# Fasila Project
 
-Fasila is an integrated smart plant monitoring solution combining IoT devices, a Django backend, an AI disease detection service, and a Flutter mobile app. It enables real-time telemetry, automated actuation (watering, ventilation), AI-based leaf disease detection, and user notifications.
+## Overview
 
-## System Design
+**Fasila** is a comprehensive smart agriculture ecosystem designed to modernize plant care through IoT monitoring, AI-driven disease detection, and remote management. It bridges the gap between traditional farming and precision agriculture, enabling users to monitor environmental conditions, automate care routines, and diagnose plant health issues in real-time via a mobile interface.
+
+### Key Features
+
+-   **IoT Monitoring Station**: Real-time tracking of critical environmental metrics:
+    -   Soil Moisture
+    -   Temperature & Humidity (DHT22)
+    -   Soil Nutrients (NPK)
+    -   Light Intensity
+    -   Water Tank Levels
+-   **Intelligent Automation**:
+    -   Automated irrigation based on moisture levels.
+    -   Smart ventilation (fan control) triggered by temperature/humidity thresholds.
+    -   Automated protective shading (motorized cover) responsive to light intensity.
+-   **AI Disease Diagnosis**:
+    -   Computer vision pipeline using YOLO for leaf detection and ResNet152 for disease classification.
+    -   Identifies various diseases in plants like Tomatoes, Cucumbers, and Bell Peppers.
+-   **Mobile Command Center**:
+    -   Flutter-based mobile app for data visualization.
+    -   Push notifications for disease alerts (via Firebase).
+    -   Plant encyclopedia and care guides.
+
+---
+
+## System Architecture
+
+The system operates on a decoupled architecture where the IoT components communicate via MQTT, while the AI system interacts with the backend via REST APIs.
 
 ```mermaid
 graph TD
-    subgraph User
-        A[Flutter Mobile App]
+    subgraph "IoT Node (Raspberry Pi)"
+        Sensors[Sensors: Soil, NPK, DHT, Light] -->|Data| IoT_Core[iot_system.py]
+        IoT_Core -->|Action| Actuators[Relays, Pumps, Fan, Motor]
+        IoT_Core -->|MQTT Pub/Sub| MQTT_Broker[HiveMQ Broker]
     end
 
-    subgraph Cloud Infrastructure
-        B[Django Backend]
-        C[PostgreSQL Database]
-        D[Redis]
-        E[AI Disease Detection System]
-        I[MQTT Broker]
+    subgraph "AI Diagnostics"
+        Camera[Camera] -->|Stream| Capture[capture_images.py]
+        Capture -->|Image| Pipeline[detect_and_classify.py]
+        Pipeline -->|YOLOv8| Leaf_Det[Leaf Detection]
+        Leaf_Det -->|ResNet152| Disease_Clf[Disease Classification]
+        Disease_Clf -->|HTTP POST| Backend_API
     end
 
-    subgraph IoT Device
-        F[Raspberry Pi]
-    G[Soil Moisture, Temp/Humidity, NPK, Light, Water Level]
-    H[Water Pump, Fan, Light Cover]
+    subgraph "Backend Infrastructure (Django)"
+        MQTT_Broker -->|Daphne/Channels| Django_Service[Django Backend]
+        Django_Service -->|Persist| DB[(PostgreSQL)]
+        Django_Service -->|Cache/Queue| Redis[Redis]
+        Django_Service -->|Store Media| S3[AWS S3]
+        Django_Service -->|Push Alerts| FCM[Firebase Cloud Messaging]
     end
 
-    A -- REST API --> B
-    B -- Stores/Retrieves Data --> C
-    B -- Caching/WebSockets --> D
-    F -- Publishes Sensor Data --> I
-    B -- Subscribes to Sensor Data --> I
-    E -- Sends Detection Results (REST API) --> B
-    F -- Reads --> G
-    F -- Controls --> H
+    subgraph "User Interface (Mobile)"
+        Mobile_App[Flutter App] -->|REST API| Backend_API[DRF API Endpoints]
+        Mobile_App -->|WebSocket| Django_Service
+        FCM -->|Alerts| Mobile_App
+    end
 ```
-
-## Project overview
-
-Purpose: monitor plant conditions, automate actuators (watering/ventilation), detect plant diseases using AI, and notify users through mobile app.
-
-Key features:
-- Real-time telemetry from Raspberry Pi sensors (MQTT).
-- Central Django backend providing REST API and WebSocket endpoints.
-- Redis for caching and channels (websockets) support; Celery for background jobs and scheduled tasks.
-- AI service for disease detection (image-based) and model artifacts in `AI-System/Models`.
-- Flutter mobile app for user interaction and push notifications (FCM).
-
-## Technology stack
-
-- Backend: Python, Django, Django REST Framework, Django Channels (WebSockets), Celery
-- Database: PostgreSQL
-- Cache / broker: Redis
-- Messaging: MQTT (paho-mqtt on device), Firebase Cloud Messaging (push)
-- AI: Python, TensorFlow/Keras, OpenCV, Ultralytics (YOLO) for detection
-- Frontend: Flutter (Dart)
-- IoT: Raspberry Pi, `paho-mqtt`, `gpiozero`, `adafruit-dht`, `spidev`
-
-Dependencies (primary): see `Back-End/requirements.txt` and `Front-End/pubspec.yaml`.
-
-## Quick start (development)
-
-Prerequisites:
-- Python 3.9+ (or matching project's interpreter)
-- pip, virtualenv
-- PostgreSQL
-- Redis
-- Flutter SDK (for the mobile app)
-- (Optional) Docker if you prefer containerized services
-
-Clone the repo:
-
-```bash
-git clone https://github.com/your-username/fasila-project.git
-cd fasila-project
-```
-
-Backend (Django)
-
-```bash
-cd Back-End
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-# create .env with SECRET_KEY, DATABASE_URL, REDIS_URL, and any other env vars
-python manage.py migrate
-python manage.py runserver
-```
-
-Notes:
-- If using a local PostgreSQL, set DATABASE_URL to `postgres://USER:PASS@HOST:PORT/DBNAME`.
-- Ensure `service-account.json` (Firebase) is placed in `Back-End/fasila/service-account.json` or set appropriate env vars.
-
-Frontend (Flutter)
-
-```bash
-cd Front-End
-flutter pub get
-flutter run
-```
-
-AI service
-
-```bash
-cd AI-System
-python -m venv venv-ai
-source venv-ai/bin/activate
-pip install -r requirements.txt  # if present, otherwise install tensorflow, opencv, etc.
-# run inference server or script used by project (adjust path to the project's entrypoint)
-python run_inference_service.py
-```
-
-IoT device (Raspberry Pi)
-
-- Install Python packages: `paho-mqtt`, `gpiozero`, `adafruit-dht`, etc.
-- Configure MQTT broker address (point to cloud or local broker) in device script at `IOT-System/iot_system.py` or `AI-System/System-Pipeline` as used.
-- Run the device script:
-
-```bash
-python IOT-System/iot_system.py
-```
-
-## Environment variables
-
-- `SECRET_KEY` - Django secret
-- `DATABASE_URL` - PostgreSQL connection string
-- `REDIS_URL` - Redis connection string
-- `FCM_CREDENTIALS` / `GOOGLE_APPLICATION_CREDENTIALS` - path to Firebase service account
-- AI-specific vars: model paths under `AI-System/Models`
-
-## Directory structure
-
-Top-level layout (trimmed):
-
-```
-fasila-project/
-├── AI-System/
-│   ├── Models/                # trained model files (.pt, .keras, etc.)
-│   ├── System-Pipeline/       # AI processing scripts
-│   └── Train/                 # notebooks and training assets
-├── Back-End/                  # Django project
-│   ├── api/
-│   ├── communications/
-│   ├── devices/
-│   ├── fasila/                # Django settings, ASGI, wsgi
-│   ├── guide/
-│   ├── notifications/
-│   └── users/
-├── Front-End/                 # Flutter app
-│   ├── android/
-│   ├── ios/
-│   └── lib/
-└── IOT-System/
-        └── iot_system.py          # Raspberry Pi client
-```
-
-## Testing & quality
-
-- Backend: add Django tests under apps' `tests.py` and run `python manage.py test`.
-- Frontend: use Flutter's `flutter test` for unit/widget tests.
-
-## Troubleshooting
-
-- If WebSocket connections fail, confirm Redis and Channels layers are reachable and configured.
-- If MQTT telemetry is not received, verify the broker address and network connectivity from the device.
-
-## Next steps / Improvements
-
-- Add Docker Compose to spin up Postgres, Redis, MQTT broker, and the backend locally.
-- Add a simple CI workflow to run tests and linting on PRs.
 
 ---
+
+## Directory Structure
+
+```text
+fasila-project/
+├── AI-System/                  # Computer Vision & Machine Learning
+│   ├── Models/                 # Trained model weights (.pt, .keras)
+│   ├── System-Pipeline/        # Detection & Classification scripts
+│   └── Train/                  # Training notebooks (Jupyter)
+├── Back-End/                   # Server-side Application (Django)
+│   ├── api/                    # REST API endpoints & Logic
+│   ├── communications/         # MQTT & WebSocket consumers
+│   ├── devices/                # IoT Device management
+│   ├── fasila/                 # Project Configuration (Settings, URLs)
+│   ├── notifications/          # Firebase integration
+│   ├── users/                  # Authentication & User mgmt
+│   ├── manage.py               # Django entry point
+│   └── requirements.txt        # Python dependencies
+├── IOT-System/                 # Hardware Logic
+│   └── iot_system.py           # Main Raspberry Pi controller script
+├── Mobile-Application/         # User Interface
+│   ├── lib/                    # Dart code (Screens, Controllers, Models)
+│   ├── android/                # Android platform files
+│   ├── ios/                    # iOS platform files
+│   └── pubspec.yaml            # Flutter dependencies
+└── README.md                   # Documentation
+```
+
+---
+
+## Technologies & Frameworks
+
+### Backend
+-   **Framework**: Django 5.1, Django REST Framework
+-   **Real-time**: Django Channels, Daphne, Redis
+-   **Database**: PostgreSQL
+-   **Storage**: AWS S3
+-   **Protocol**: MQTT (Paho MQTT), HTTP
+-   **Hosting**: Heroku (inferred from configuration)
+
+### Mobile Application
+-   **Framework**: Flutter (Dart)
+-   **State Management**: GetX
+-   **Charts/UI**: Syncfusion Charts, GetWidget
+-   **Notifications**: Firebase Cloud Messaging (FCM)
+
+### Artificial Intelligence
+-   **Object Detection**: YOLO (Ultralytics)
+-   **Classification**: TensorFlow/Keras (ResNet152)
+-   **Image Processing**: OpenCV
+
+### IoT / Embedded
+-   **Hardware**: Raspberry Pi
+-   **Sensors**: DHT22 (Temp/Hum), Capacitive Soil Moisture, JXCT NPK, BH1750 (Light), HC-SR04 (Ultrasonic)
+-   **Libraries**: `gpiozero`, `spidev`, `adafruit-circuitpython-dht`
+
+---
+
+## Getting Started
+
+Follow these instructions to set up the environment locally.
+
+### Prerequisites
+-   Python 3.10+
+-   Flutter SDK
+-   Redis Server (for Backend/Channels)
+-   PostgreSQL
+-   Raspberry Pi (for IoT setup)
+
+### 1. Backend Setup (Django)
+
+1.  **Navigate to the backend directory:**
+    ```bash
+    cd Back-End
+    ```
+
+2.  **Create virtual environment & install dependencies:**
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # Windows: venv\Scripts\activate
+    pip install -r requirements.txt
+    ```
+
+3.  **Environment Configuration:**
+    Create a `.env` file in `Back-End/` with the following keys (see `fasila/settings.py` for reference):
+    ```env
+    SECRET_KEY=your_secret_key
+    DEBUG=True
+    DATABASE_URL=postgres://user:password@localhost:5432/fasila_db
+    REDIS_URL=redis://localhost:6379/0
+    AWS_ACCESS_KEY_ID=...
+    AWS_SECRET_ACCESS_KEY=...
+    # Add other keys required by settings.py
+    ```
+
+4.  **Run Migrations & Server:**
+    ```bash
+    python manage.py migrate
+    python manage.py runserver
+    ```
+
+### 2. Mobile App Setup (Flutter)
+
+1.  **Navigate to the mobile app directory:**
+    ```bash
+    cd Mobile-Application
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    flutter pub get
+    ```
+
+3.  **Run the application:**
+    Ensure you have an emulator running or a physical device connected.
+    ```bash
+    flutter run
+    ```
+
+### 3. AI System Setup
+
+1.  **Navigate to the pipeline directory:**
+    ```bash
+    cd AI-System/System-Pipeline
+    ```
+
+2.  **Model Configuration:**
+    Ensure the model files are present in `AI-System/Models/` or the root of the pipeline script directory.
+    *   **Note**: The script `detect_and_classify.py` expects the classification model to be named `resnet152.keras`. You may need to rename `resnet152_98.16%.keras` to `resnet152.keras`.
+
+3.  **Run the Pipeline:**
+    ```bash
+    # Install AI dependencies if not already done
+    pip install tensorflow ultralytics opencv-python requests
+
+    # Run the detection script
+    python detect_and_classify.py
+    ```
+
+### 4. IoT System Setup
+
+1.  **Transfer code to Raspberry Pi:**
+    Copy `IOT-System/iot_system.py` and create a `.env` file with MQTT credentials.
+
+2.  **Wiring:**
+    Connect sensors to the GPIO pins defined in `iot_system.py` (e.g., Relay1: GPIO 17, Relay2: GPIO 27, DHT: GPIO 4).
+
+3.  **Run the Controller:**
+    ```bash
+    python iot_system.py
+    ```
